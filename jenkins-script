@@ -1,0 +1,51 @@
+pipeline {
+    agent { label "Master"}
+	
+	environment {
+	
+		DOCKERHUB_USER = "ankur23saini"
+		DOCKERHUB_PSW = "Dockerhub@123"
+        DOCKER_IMAGE = 'ankur23saini/build_java_app' // DockerHub repo
+		DOCKER_IMAGE_TAG = 'latest'
+		REMOTE_VM = 'ankur@192.168.29.100'
+    }
+
+	
+    stages {
+            
+        stage('Clone Java Repo') {
+            steps {
+                git branch: "master", url: "https://github.com/ankur23saini/simple-java-maven-app.git"
+            }
+        }
+        
+        stage('Build') {
+            steps {
+                sh 'mvn -B -DskipTests clean package'
+            }
+        }
+        stage('Build Jar') {
+            steps {
+                archiveArtifacts artifacts: '**/target/*.jar', allowEmptyArchive: true
+            }
+            }
+        stage('Build Docker Image on Remote VM and Push to Dockerhub') {
+            steps {
+                script {
+                    sh """
+                    ssh ${REMOTE_VM} '
+                    cd /home/ankur &&
+                    docker build -t ${DOCKER_IMAGE}:${DOCKER_IMAGE_TAG} . &&
+					          docker login -u $DOCKERHUB_USER -p $DOCKERHUB_PSW &&
+                    docker push $DOCKER_IMAGE:$DOCKER_IMAGE_TAG &&
+					          docker rmi $DOCKER_IMAGE:$DOCKER_IMAGE_TAG &&
+					          docker pull $DOCKER_IMAGE:$DOCKER_IMAGE_TAG &&
+					          docker run -d --name my-java-app $DOCKER_IMAGE:$DOCKER_IMAGE_TAG
+                    '
+                    """
+                }
+            }
+        }	
+		
+       }
+    }
